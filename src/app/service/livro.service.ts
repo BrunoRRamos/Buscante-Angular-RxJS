@@ -11,14 +11,8 @@ export class LivroService {
 
   constructor(private http: HttpClient) {}
 
-  buscar(value: string): Observable<Item[]> {
+  buscar(value: string): Observable<LivroResultado> {
     const params = new HttpParams().append('q', value);
-    return this.http
-      .get<LivroResultado>(this.API, { params })
-        .pipe(
-          tap((retornoAPI) => console.log(retornoAPI)),
-          map(res => res.items),
-          tap(res => console.log(res))
-        )
+    return this.http.get<LivroResultado>(this.API, { params });
   }
 }

@@ -1,51 +1,48 @@
-import { Component, OnDestroy } from '@angular/core';
-import { Subscription } from 'rxjs';
-import { Livro } from 'src/app/models/interfaces';
+import { Component } from '@angular/core';
+import { FormControl } from '@angular/forms';
+import { switchMap, map, filter, debounceTime, catchError, throwError, of } from 'rxjs';
+import { Item, LivroResultado } from 'src/app/models/interfaces';
+import { LivroVolumeInfo } from 'src/app/models/livroVolumeInfo';
 import { LivroService } from 'src/app/service/livro.service';
 
-@Component({
-  selector: 'app-lista-livros',
-  templateUrl: './lista-livros.component.html',
-  styleUrls: ['./lista-livros.component.css'],
-})
-export class ListaLivrosComponent implements OnDestroy {
-  listaLivros: Livro[];
-  campoBusca: string = '';
-  subscription: Subscription;
-  livro: Livro;
+  const PAUSA = 300;
 
-  constructor(private livroService: LivroService) {}
+  @Component({
+    selector: 'app-lista-livros',
+    templateUrl: './lista-livros.component.html',
+    styleUrls: ['./lista-livros.component.css'],
+  })
+  export class ListaLivrosComponent {
+    campoBusca = new FormControl();
+    mensagemErro = '';
+    livrosResultados: LivroResultado;
 
-  buscarLivros() {
-    this.subscription = this.livroService.buscar(this.campoBusca).subscribe({
-      next: (items) => {
-        this.listaLivros = this.livrosResultado(items);
-      },
-      error: (erro) => console.log(erro),
-    });
-  }
+    constructor(private livroService: LivroService) {}
 
-  livrosResultado(items): Livro[] {
-    const livros: Livro[] = [];
+    totalLivros$ = this.campoBusca.valueChanges.pipe(
+      debounceTime(PAUSA),
+      filter((valorDigitado) => valorDigitado.length >= 3),
+      switchMap((valorDigitado) => this.livroService.buscar(valorDigitado)),
+      map(resultado => this.livrosResultados = resultado),
+      catchError((erro)=> {
+        return of();
+      })
+    );
 
-    items.forEach((item) => {
-      livros.push(
-        (this.livro = {
-          title: item.volumeInfo?.title,
-          authors: item.volumeInfo?.authors,
-          publisher: item.volumeInfo?.publisher,
-          publishedDate: item.volumeInfo?.publishedDate,
-          description: item.volumeInfo?.description,
-          previewLink: item.volumeInfo?.previewLink,
-          thumbnail: item.volumeInfo?.imageLinks?.thumbnail,
-        })
-      );
-    });
 
-    return livros;
-  }
+    livrosEncontrados$ = this.campoBusca.valueChanges.pipe(
+      debounceTime(PAUSA),
+      filter((valorDigitado) => valorDigitado.length >= 3),
+      switchMap((valorDigitado) => this.livroService.buscar(valorDigitado)),
+      map(resultado => resultado.items ?? []),
+      map((items) => this.livrosResultado(items)),
+      catchError(() => {
+        return throwError(() => new Error(this.mensagemErro = 'API ERROR'))}
+    ));
 
-  ngOnDestroy(): void {
-    this.subscription.unsubscribe();
-  }
-}
+    livrosResultado(items: Item[]): LivroVolumeInfo[] {
+      return items.map((item) => {
+        return new LivroVolumeInfo(item);
+      });
+    }
+  };
